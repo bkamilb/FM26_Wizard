@@ -183,6 +183,13 @@ def get_percentile_value(value, thresholds, reverse=False):
     if len(t) < 4 or t[3] == t[0]: return 50 
     
     if not reverse:
+        # Alt ve üst limit şartlarını sildik, direkt oran hesaplıyoruz
+        return 5 + (val - t[0]) * (90) / (t[3] - t[0])
+    else:
+        # Ters istatistikler için hesaplama
+        return 5 + (t[0] - val) * (90) / (t[0] - t[3])
+    
+    if not reverse:
         if val <= t[0]: return 5
         elif val >= t[3]: return 95
         else: return 5 + (val - t[0]) * (90) / (t[3] - t[0])
@@ -226,6 +233,9 @@ def render_scoutlab_stat_bar(metric_name, value, thresholds, perc):
     track = "rgba(29, 209, 161, 0.15)" if perc >= 75 else "rgba(16, 172, 132, 0.15)" if perc >= 50 else "rgba(254, 202, 87, 0.15)" if perc >= 25 else "rgba(255, 107, 107, 0.15)"
     display_val = f"{float(value):.2f}"
     
+    # Görsel barın taşmasını engelle ama rakamı gerçek bırak
+    visual_perc = min(max(perc, 0), 100)
+    
     return f"""
     <div style='margin-bottom: 12px;'>
         <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;'>
@@ -236,7 +246,7 @@ def render_scoutlab_stat_bar(metric_name, value, thresholds, perc):
             </div>
         </div>
         <div style='width: 100%; background-color: {track}; height: 8px; border-radius: 4px; position: relative;'>
-            <div style='width: {perc}%; background-color: {color}; height: 100%; border-radius: 4px;'></div>
+            <div style='width: {visual_perc}%; background-color: {color}; height: 100%; border-radius: 4px;'></div>
         </div>
     </div>
     """
@@ -421,9 +431,12 @@ def show_player_popup(player_name):
         
         if perc_data:
             perc_df = pd.DataFrame(perc_data).sort_values("Percentile", ascending=True)
+            # Tab 2'deki percentile özet grafiği için:
             fig_bar = px.bar(perc_df, x="Percentile", y="Metrik", orientation='h',
                              color="Percentile", color_continuous_scale="Viridis",
-                             range_x=[0, 100], template="plotly_dark")
+                             # En yüksek değer %100'ü geçerse grafiği o değere göre genişlet:
+                             range_x=[0, max(100, perc_df["Percentile"].max() + 10)], 
+                             template="plotly_dark")
             fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                                   coloraxis_showscale=False, height=400, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_bar, use_container_width=True, theme=None)
